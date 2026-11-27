@@ -8,6 +8,7 @@
     "job-agent": "apps/orchestrator/src/cli.ts"
   },
   "scripts": {
+    "preinstall": "node -e \"const v=process.version.slice(1).split('.')[0]; if (v!=='22') { console.error('Requires Node 22 (found '+process.version+'). Use nvm use 22.'); process.exit(1); }\"",
     "setup": "node scripts/setup.mjs",
     "browser:install-obscura": "bash scripts/install-obscura.sh",
     "agent": "tsx apps/orchestrator/src/cli.ts",
