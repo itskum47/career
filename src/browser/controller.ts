@@ -104,7 +104,7 @@ export class BrowserController {
     if (this.config.backend === 'obscura') {
       // Spawn obscura serve and connect over CDP.
       const { spawn } = await import('child_process');
-      const args = ['serve', '--port', String(this.config.obscuraPort)];
+      const args = ['serve', '--port', String(this.config.obscuraPort), '--allow-private-network'];
       if (this.config.obscuraStealth) args.push('--stealth');
       this.obscuraProcess = spawn(this.config.obscuraBin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
       // Wait for readiness

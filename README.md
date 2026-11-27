@@ -85,6 +85,11 @@ OBSCURA_STEALTH=true   # optional
 
 Playwright's automation API is unchanged — only the launched browser swaps.
 
+**Limitation (as of obscura 0.2.7):** obscura's V8 runtime does not implement
+`DataTransfer`, so `setInputFiles` (resume/cover-letter upload) fails. For job
+applications that require file uploads, keep `BROWSER_BACKEND=playwright`. Obscura
+remains useful for scraping, screenshots and non-upload automation.
+
 ## Safety
 
 - Never commits secrets: `.env*` is gitignored.
