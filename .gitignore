@@ -62,6 +62,7 @@ dist/
 /scripts/*
 !/scripts/setup.mjs
 !/scripts/migrate.ts
+!/scripts/install-obscura.sh
 !/scripts/seed-fake-data.ts
 !/scripts/performance-report.ts
 !/scripts/chat-control.ts
