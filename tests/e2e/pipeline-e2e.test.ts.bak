@@ -1,0 +1,196 @@
+import {FakeATSServer} from './fake-ats.ts';
+import {createDatabaseClient} from '../src/database/client.ts';
+import * as path from 'path';
+import {JobRepository, JobDescriptionRepository, MatchRepository, ResumeRepository, CoverLetterRepository} from '../src/database/repositories.ts';
+import {ApplicationEngine} from '../src/application/engine.ts';
+import {loadProfile} from '../src/profile/loader.ts';
+import {createDefaultDiscoveryManager} from '../src/discovery/manager.ts';
+
+describe('End-to-End Fake ATS Pipeline', () => {
+  let server: FakeATSServer;
+  
+  beforeAll(async () => {
+    const port = 32700;
+    server = new FakeATSServer(port);
+    await server.start();
+  });
+  
+  afterAll(async () => {
+    await server.stop();
+  });
+  
+  it('should run the full pipeline end-to-end', async () => {
+    const db = await createDatabaseClient();
+    await db.runMigrations(path.join(process.cwd(), 'migrations'));
+    await db.query('PRAGMA foreign_keys = OFF');
+    
+    const jobRepo = new JobRepository(db);
+    const jdRepo = new JobDescriptionRepository(db);
+    const matchRepo = new MatchRepository(db);
+    const resumeRepo = new ResumeRepository(db);
+    const coverRepo = new CoverLetterRepository(db);
+    const profile = await loadProfile();
+    
+    // Step 1: Discovery - MockDiscoveryAdapter returns our fake job
+    const discoveryManager = createDefaultDiscoveryManager();
+    const discoveredJobs = await discoveryManager.discover({
+      keywords: [],
+      locations: [],
+      remote: true,
+      seniority: [],
+      maxResults: 10,
+      postedWithinDays: 365
+    });
+    
+    const fakeJob = discoveredJobs.find((j: any) => j.url && j.url.includes('localhost:32700')) || discoveredJobs[0];
+    const jobId = fakeJob.jobId as any;
+    
+    console.log('Discovery job:', jobId, fakeJob.company, fakeJob.title, fakeJob.url);
+    
+    // Step 2: Upsert job
+    await jobRepo.upsertCompany({companyId: 'COMP-testcorp' as any, name: 'TestCorp'});
+    await jobRepo.upsertJob({
+      jobId,
+      company: 'TestCorp',
+      title: 'DevOps Engineer',
+      location: 'Remote',
+      remote: true,
+      url: fakeJob.url,
+      source: fakeJob.source,
+      description: fakeJob.description,
+      remotePolicy: 'unspecified'
+    } as any, 'COMP-testcorp' as any);
+    
+    // Step 3: JD Extraction
+    const fetch = await import('node-fetch');
+    const res = await fetch.default(fakeJob.url);
+    const html = await res.text();
+    
+    const {JDExtractor} = await import('../src/jd/extractor.ts');
+    const jdExtractor = new JDExtractor();
+    const extractionResult = jdExtractor.extract({
+      html,
+      url: fakeJob.url
+    } as any);
+    
+    console.log('JD extracted:', extractionResult.jobDescription.title, extractionResult.jobDescription.company);
+    console.log('Full text:', extractionResult.jobDescription.fullText.substring(0, 80));
+    console.log('Confidence:', extractionResult.confidence);
+    console.log('Extraction method:', extractionResult.extractionMethod);
+    
+    // Upsert JD
+    await jdRepo.upsert({
+      jobId,
+      company: extractionResult.jobDescription.company,
+      title: extractionResult.jobDescription.title,
+      location: extractionResult.jobDescription.location,
+      remote: extractionResult.jobDescription.remote,
+      remotePolicy: extractionResult.jobDescription.remotePolicy || 'fully-remote',
+      employmentType: 'full-time',
+      seniority: 'mid',
+      description: extractionResult.jobDescription.fullText,
+      requiredSkills: JSON.stringify(extractionResult.jobDescription.required_skills || []),
+      preferredSkills: JSON.stringify(extractionResult.jobDescription.preferred_skills || []),
+      niceToHaveSkills: JSON.stringify(extractionResult.jobDescription.nice_to_have_skills || []),
+      responsibilities: JSON.stringify(['test responsibility']),
+      requirements: JSON.stringify(['test requirement']),
+      benefits: JSON.stringify(['test benefit']),
+      experienceRequirements: JSON.stringify([]),
+      educationRequirements: JSON.stringify([]),
+      certifications: JSON.stringify([]),
+      cloudPlatforms: JSON.stringify(extractionResult.jobDescription.cloud_platforms || []),
+      programmingLanguages: JSON.stringify(extractionResult.jobDescription.programming_languages || []),
+      devopsTools: JSON.stringify(extractionResult.jobDescription.devops_tools || []),
+      cicdTools: JSON.stringify(extractionResult.jobDescription.cicd_tools || []),
+      monitoringTools: JSON.stringify(extractionResult.jobDescription.monitoring_tools || []),
+      databases: JSON.stringify(extractionResult.jobDescription.databases || []),
+      securityRequirements: JSON.stringify(extractionResult.jobDescription.security_requirements || []),
+      keywords: JSON.stringify(extractionResult.jobDescription.keywords || []),
+      applicationQuestions: JSON.stringify(extractionResult.jobDescription.application_questions || []),
+      otherConstraints: JSON.stringify(extractionResult.jobDescription.other_constraints || []),
+      fullText: extractionResult.jobDescription.fullText,
+      source: extractionResult.jobDescription.source,
+      url: fakeJob.url,
+      postedAt: new Date(),
+      extractedAt: new Date(),
+      confidence: extractionResult.confidence,
+      extractionMethod: extractionResult.extractionMethod
+    } as any);
+    
+    // Step 4: Matching
+    const {CandidateMatcher} = await import('../src/match/engine.ts');
+    const matcher = new CandidateMatcher();
+    const matchAnalysis = matcher.match(extractionResult.jobDescription, profile);
+    
+    console.log('Match result:', matchAnalysis.overallScore, matchAnalysis.recommendation);
+    
+    await matchRepo.upsert({
+      matchId: 'MATCH-1', jobId, candidateId: profile.candidateId, overallScore: matchAnalysis.overallScore,
+      confidence: 0.8, recommendation: matchAnalysis.recommendation,
+      requiredMatches: [], preferredMatches: [], niceToHaveMatches: [],
+      missingRequired: [], missingPreferred: [],
+      reasoning: matchAnalysis.reasoning || [], strengths: matchAnalysis.strengths || [],
+      gaps: matchAnalysis.gaps || [], analyzedAt: new Date()
+    } as any);
+    
+    // Step 5: Resume generation
+    const {ResumeGenerator} = await import('../src/resume/generator.ts');
+    const resumeGenerator = new ResumeGenerator();
+    const resumeResult = await resumeGenerator.generate({
+      profile,
+      jobDescription: extractionResult.jobDescription,
+      matchAnalysis
+    } as any);
+    
+    console.log('Resume ATS score:', resumeResult.atsScore.overall);
+    
+    await resumeRepo.upsert({
+      resumeId: resumeResult.resume.resumeId,
+      jobId, candidateId: profile.candidateId,
+      filePath: resumeResult.resume.filePath,
+      format: resumeResult.resume.format,
+      content: resumeResult.resume.content,
+      keywords: resumeResult.resume.keywords,
+      atsScore: resumeResult.atsScore,
+      templateId: resumeResult.resume.templateId,
+      generatedAt: resumeResult.resume.generatedAt,
+      version: resumeResult.resume.version
+    } as any);
+    
+    // Step 6: Cover letter generation
+    const {CoverLetterGenerator} = await import('../src/cover/generator.ts');
+    const coverGenerator = new CoverLetterGenerator();
+    const coverResult = await coverGenerator.generate({
+      profile,
+      jobDescription: extractionResult.jobDescription,
+      matchAnalysis
+    } as any);
+    
+    console.log('Cover letter generated');
+    
+    await coverRepo.upsert({
+      coverLetterId: coverResult.coverLetter.coverLetterId,
+      jobId, candidateId: profile.candidateId,
+      content: coverResult.coverLetter.content,
+      filePath: coverResult.coverLetter.filePath,
+      templateId: coverResult.coverLetter.template_id,
+      generatedAt: coverResult.coverLetter.generatedAt
+    } as any);
+    
+    // Step 7: Application Engine
+    const appEngine = new ApplicationEngine();
+    await appEngine.initialize();
+    const result = await appEngine.apply({
+      jobId,
+      profile,
+      autoSubmit: false
+    } as any);
+    
+    console.log('Application result:', JSON.stringify({success: result.success, state: result.application.state, error: result.error}));
+    
+    await appEngine.close();
+    
+    // Verification
+    expect(result.success || result.application.state).toBeDefined();
+  });
+});

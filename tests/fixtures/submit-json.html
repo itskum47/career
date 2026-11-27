@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!--
+  Phase 6U fixture — reproduces a modern ATS submission transport (the shape
+  Greenhouse uses, measured 2026-10-08): the submit button does NOT navigate and
+  does NOT post a form. It POSTs JSON (cross-origin-capable), then renders a
+  confirmation view.
+
+  Used to prove the submission instrumentation records request AND response
+  events with the correct Playwright shapes (Attempt 7 crashed by treating a
+  `request` event as a Response), and that instrumentation cannot crash a run.
+-->
+<html lang="en">
+<head><meta charset="utf-8" /><title>Application form</title></head>
+<body>
+  <h1>Senior Release Engineer</h1>
+  <label>Full name<input id="full_name" name="first_name" /></label>
+  <button type="submit" class="btn btn--pill">Submit application</button>
+  <div id="result"></div>
+
+  <script>
+    window.__submitCalls = 0;
+    document.querySelector('button[type="submit"]').addEventListener('click', async (e) => {
+      e.preventDefault();
+      window.__submitCalls += 1;
+      const body = { job_application: { first_name: document.getElementById('full_name').value } };
+      const res = await fetch('http://submit.fixture.local/gitlab/jobs/8730125002', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const out = document.getElementById('result');
+      if (res.ok) {
+        out.textContent = 'Application submitted. Confirmation ID: CONF-FIXTURE-1';
+      } else {
+        out.textContent = 'Submission rejected';
+      }
+    });
+  </script>
+</body>
+</html>

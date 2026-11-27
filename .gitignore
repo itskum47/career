@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets (NEVER commit)
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Database (SQLite) — personal data
+/data/
+# keep migrations (separate dir)
+
+# Personal artifacts / trackers
+/job-applications.xlsx
+/output/
+/logs/
+/applications/
+/snapshots/
+/.escalations/
+/.cache/
+/.playwright-browsers/
+/.playwright-cache/
+/.playwright-mcp/
+/.test-browser-profile/
+/.test-cv/
+
+# Profile (personal) — keep only the example template
+/profile/master_profile.yaml
+/profile/backups/
+
+# Tooling / internal (not needed by users)
+/.claude/
+/.snapshots/
+/.planning/
+/benchmarks/
+/build/
+*.png
+*.jpg
+
+# Personal portal sweep config
+/config/sweep_portals.json
+
+# Personal one-off scripts at repo root (not part of the product)
+/*.mjs
+/*.cjs
+/run_*.ts
+/phase*.ts
+/test-real-*.cjs
+/linkedin-jobs.json
+/performance-report.md
+/resumes/
+/resume_audit/
+/resume_worded_recreation/
+/template18_recreation/
+/output/
+
+# scripts/: keep only the product entry points
+/scripts/*
+!/scripts/setup.mjs
+!/scripts/migrate.ts
+!/scripts/seed-fake-data.ts
+!/scripts/performance-report.ts
+!/scripts/chat-control.ts
+
+# OS
+.DS_Store
+Thumbs.db

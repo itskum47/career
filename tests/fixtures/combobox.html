@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Combobox fixture</title></head>
+<body>
+<form id="f">
+  <label for="q_country">What is your current country of residence?*</label>
+  <div class="control">
+    <input id="q_country" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+           aria-label="country" autocomplete="off">
+    <input type="hidden" name="country" id="country_value">
+  </div>
+  <ul role="listbox" id="opts" hidden>
+    <li role="option">India</li>
+    <li role="option">Indonesia</li>
+    <li role="option">Germany</li>
+  </ul>
+  <script>
+    // Minimal react-select stand-in: STRICT filtering (typed text must equal
+    // an option for the menu to show — mirrors non-fuzzy comboboxes), and the
+    // committed value only lands when an option is CLICKED.
+    var input = document.getElementById('q_country');
+    var list = document.getElementById('opts');
+    var hidden = document.getElementById('country_value');
+    function open() {
+      // react-select re-renders its option list on reopen — mirror that by
+      // resetting per-option filter state whenever the menu opens.
+      list.querySelectorAll('[role=option]').forEach(function (o) { o.hidden = false; });
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+    function close() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); }
+    input.addEventListener('input', function () {
+      var v = input.value.trim().toLowerCase();
+      var any = false;
+      list.querySelectorAll('[role=option]').forEach(function (o) {
+        var show = o.textContent.trim().toLowerCase() === v;
+        o.hidden = !show;
+        if (show) any = true;
+      });
+      if (v !== '' && any) open(); else close();
+    });
+    input.addEventListener('focus', open);
+    input.addEventListener('click', open);
+    list.addEventListener('click', function (e) {
+      var o = e.target.closest('[role=option]');
+      if (!o) return;
+      input.value = o.textContent.trim();
+      hidden.value = o.textContent.trim();
+      close();
+    });
+  </script>
+</form>
+</body>
+</html>

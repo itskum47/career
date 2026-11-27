@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<!--
+  Phase 6U fixture — reproduces Greenhouse's (LOTUS renderer) attachment
+  contract for the two inputs that actually exist on the live form:
+
+    <input id="resume"       class="visually-hidden" type="file" accept="...">   (NO name)
+    <input id="cover_letter" class="visually-hidden" type="file" accept="...">   (NO name)
+
+  and its commit lifecycle:
+    input change → GET  /uncacheable_attributes/presigned_fields?fields[]=…
+                → XHR POST <presigned url>/<key{timestamp}{unique_id}>  (multipart)
+                → 2xx only → store {name, url} and render the filename chip
+                → the form validator ("Resume/CV is required.") accepts the
+                  attachment only when that {name, url} object exists.
+
+  window.__validate() exposes that validator WITHOUT submitting, so a test can
+  prove Greenhouse-equivalent validation passes while window.__submitted stays
+  null (Submit is never clicked by this suite).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Job Application for Senior Release Engineer at Fixture Corp</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 760px; padding: 24px; }
+    .section { margin-bottom: 28px; }
+    .label { font-weight: 600; display: block; margin-bottom: 6px; }
+    .chip { display: inline-block; border: 1px solid #999; border-radius: 4px; padding: 4px 10px; margin-top: 8px; }
+    .error { color: #c0392b; font-size: 14px; margin-top: 6px; }
+    button { margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Senior Release Engineer</h1>
+
+  <div class="section">
+    <span class="label">Resume/CV *</span>
+    <input id="resume" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.rtf" />
+    <button type="button" id="resume-attach">Attach</button>
+    <div id="resume-slot"></div>
+  </div>
+
+  <div class="section">
+    <span class="label">Cover Letter</span>
+    <input id="cover_letter" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.rtf" />
+    <button type="button" id="cover-attach">Attach</button>
+    <div id="cover_letter-slot"></div>
+  </div>
+
+  <div id="errors"></div>
+  <button type="submit" id="submit">Submit application</button>
+
+  <script>
+    // Attachment state, mirroring Greenhouse's payload contract:
+    // a field counts as present only when it holds an object with name AND url.
+    window.__state = { resume: null, cover_letter: null };
+    window.__submitted = null;   // stays null until Submit is actually clicked
+    window.__requests = [];      // upload lifecycle log (method/host/path only)
+
+    const UPLOAD_ORIGIN = 'https://file-upload.fixture.local';
+
+    function renderError(message) {
+      const box = document.getElementById('errors');
+      box.innerHTML = '';
+      if (message) {
+        const div = document.createElement('div');
+        div.className = 'error';
+        div.textContent = message;
+        box.appendChild(div);
+      }
+    }
+
+    // Greenhouse's kt(): an attachment is valid only with name AND url.
+    function validAttachment(a) {
+      return !!a && typeof a === 'object' && !!a.name && !!a.url;
+    }
+
+    // Greenhouse-equivalent validator, callable without submitting.
+    window.__validate = function () {
+      const errors = [];
+      if (!validAttachment(window.__state.resume)) errors.push('Resume/CV is required.');
+      if (!validAttachment(window.__state.cover_letter)) errors.push('Cover letter is required.');
+      return errors;
+    };
+
+    function renderChip(kind, fileName) {
+      const slot = document.getElementById(kind + '-slot');
+      slot.innerHTML = '';
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.setAttribute('data-testid', kind + '-chip');
+      chip.textContent = fileName;
+      slot.appendChild(chip);
+    }
+
+    async function attach(kind, file) {
+      if (!file) return;
+      // 1) presigned fields (same-origin relative call in production)
+      const fieldsRes = await fetch(
+        UPLOAD_ORIGIN + '/uncacheable_attributes/presigned_fields?fields[]=' + kind
+      );
+      const presigned = await fieldsRes.json();
+      const uploader = presigned[kind];
+
+      // 2) multipart upload to <url>/<key{timestamp}{unique_id}>
+      const key = uploader.key
+        .replace('{timestamp}', String(Date.now()))
+        .replace('{unique_id}', Math.random().toString(36).slice(2, 16));
+      const form = new FormData();
+      form.append('utf8', '✓');
+      for (const f in uploader.fields) form.append(f, uploader.fields[f]);
+      form.append('key', key);
+      form.append('authenticity_token', '1234');
+      form.append('file', file);
+
+      const status = await new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = function (c) { window.__progress = c.loaded / c.total; };
+        xhr.onloadend = function () {
+          window.__requests.push({
+            method: 'POST',
+            path: '/' + kind + '/file_upload/' + key.split('/').pop(),
+            multipart: (xhr.getResponseHeader('content-type') || '').includes('multipart'),
+            status: xhr.status,
+          });
+          resolve(xhr.status);
+        };
+        xhr.onerror = function () {
+          window.__requests.push({ method: 'POST', path: '/' + kind + '/file_upload', status: 0 });
+          resolve(0);
+        };
+        xhr.open('POST', presigned.url + '/' + key);
+        xhr.send(form);
+      });
+
+      // 3) commit ONLY on 2xx — exactly Greenhouse's behaviour.
+      if (status >= 200 && status < 300) {
+        window.__state[kind] = { name: file.name, url: presigned.url + '/' + key };
+        renderChip(kind, file.name);
+      }
+    }
+
+    document.getElementById('resume').addEventListener('change', (e) => attach('resume', e.target.files?.[0]));
+    document.getElementById('cover_letter').addEventListener('change', (e) => attach('cover_letter', e.target.files?.[0]));
+    document.getElementById('resume-attach').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('resume').click(); });
+    document.getElementById('cover-attach').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('cover_letter').click(); });
+
+    document.getElementById('submit').addEventListener('click', (e) => {
+      e.preventDefault();
+      const errors = window.__validate();
+      renderError(errors.length ? errors[0] : '');
+      window.__submitted = {
+        at: Date.now(),
+        resume: window.__state.resume ? { name: window.__state.resume.name, url: window.__state.resume.url } : null,
+        coverLetter: window.__state.cover_letter ? { name: window.__state.cover_letter.name, url: window.__state.cover_letter.url } : null,
+        errors,
+      };
+      if (!errors.length) window.__navigatedToConfirmation = true;
+    });
+  </script>
+</body>
+</html>

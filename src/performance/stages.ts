@@ -1,0 +1,61 @@
+/**
+ * Standard stage names for performance tracking
+ */
+export const STAGES = {
+  DISCOVERY_ADAPTER: (source: string) => `discovery.adapter.${source}`,
+  JD_EXTRACTION: 'jd.extraction',
+  JD_VERIFICATION: 'jd.verification',
+  DEDUPLICATION: 'deduplication',
+  MATCH_SCORING: 'match.scoring',
+  RESUME_GENERATION: 'resume.generation',
+  COVER_GENERATION: 'cover.generation',
+  ARTIFACT_PDF_RESUME: 'artifact.pdf.resume',
+  ARTIFACT_PDF_COVER: 'artifact.pdf.cover',
+  BROWSER_LAUNCH: 'browser.launch',
+  BROWSER_CONTEXT_CREATE: 'browser.context_create',
+  BROWSER_NAVIGATE: 'browser.navigate',
+  // Sub-stages inside browser.navigate (Phase 4 navigation analysis)
+  BROWSER_NAV_GOTO: 'nav.goto',
+  BROWSER_NAV_READINESS: 'nav.readiness',
+  BROWSER_NAV_TITLE: 'nav.title',
+  BROWSER_ATS_DETECT: 'browser.detect_ats',
+  // Sub-stages inside browser.submit (Phase 5A submission decomposition)
+  SUBMIT_CLICK: 'submit.click',
+  SUBMIT_FIND: 'submit.find_button',
+  SUBMIT_PRESS: 'submit.press',
+  SUBMIT_RESPONSE_WAIT: 'submit.response_wait',
+  DB_PERSIST_APPLICATION: 'db.persist_application',
+  // Sub-stages inside browser.fillForm (Phase 5C form profiling)
+  FILL_PREP: 'fill.prepare',
+  FILL_SELECTOR: 'fill.selector',
+  FILL_ACTION: 'fill.action',
+  FILL_FALLBACK: 'fill.fallback',
+  FILL_FIELD: (name: string) => `fill.field.${name}`,
+  // Sub-stages inside browser.upload (Phase 5F upload profiling)
+  UPLOAD_FIND: 'upload.find_input',
+  UPLOAD_SET_FILES: 'upload.set_files',
+  UPLOAD_VERIFY: 'upload.verify',
+  // Sub-stages inside browser.session_save (Phase 5G lifecycle profiling)
+  SESSION_SNAPSHOT: 'session.snapshot',
+  SESSION_SCREENSHOT: 'session.screenshot',
+  SESSION_WRITE: 'session.write',
+  // Sub-stages in human escalation / resume (Phase 5J)
+  ESCALATION_CREATE: 'escalation.create',
+  ESCALATION_SNAPSHOT: 'escalation.snapshot',
+  RESUME_RESTORE: 'resume.restore',
+  BROWSER_PAGE_READY: 'browser.page_ready',
+  BROWSER_CAPTURE_PAGE_STATE: 'browser.capturePageState',
+  BROWSER_FORM_DETECTION: 'browser.form_detection',
+  BROWSER_FILL_FORM: 'browser.fillForm',
+  BROWSER_UPLOAD: 'browser.upload',
+  BROWSER_VALIDATION: 'browser.validation',
+  BROWSER_SUBMIT: 'browser.submit',
+  BROWSER_CONFIRMATION: 'browser.confirmation',
+  BROWSER_SESSION_SAVE: 'browser.session_save',
+  DB_READ: 'db.read',
+  DB_WRITE: 'db.write',
+  EXCEL_SYNC: 'excel.sync',
+  HUMAN_ESCALATION_WAIT: 'human.escalation.wait',
+  APPLICATION_TOTAL: 'application.total',
+  JOB_COMPLETE: 'job.complete',
+} as const;
