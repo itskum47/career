@@ -70,3 +70,7 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+# Obscura install artifacts
+obscura-aarch64-*.tar.gz
+obscura-worker
+obscura
