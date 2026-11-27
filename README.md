@@ -70,6 +70,21 @@ All config is via `.env` (see `.env.example`). Key flags:
 - `AUTO_SUBMIT=false` — keep false until you trust it. Submission is gated.
 - `CV_OUTPUT_DIR=~/Desktop/cv`, `EXCEL_PATH=~/Desktop/job-applications.xlsx`.
 
+## Optional: Obscura browser backend
+
+By default the agent drives Chromium via Playwright. For a lighter, stealthier
+engine (Rust, ~4 MB, anti-detect), install
+[Obscura](https://github.com/itskum47/obscura) and flip the backend:
+
+```bash
+npm run browser:install-obscura
+# then in .env:
+BROWSER_BACKEND=obscura
+OBSCURA_STEALTH=true   # optional
+```
+
+Playwright's automation API is unchanged — only the launched browser swaps.
+
 ## Safety
 
 - Never commits secrets: `.env*` is gitignored.

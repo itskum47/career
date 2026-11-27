@@ -6,6 +6,10 @@ export interface BrowserConfig {
   profilePath: string;
   headless: boolean;
   slowMo: number;
+  backend: 'playwright' | 'obscura';
+  obscuraPort: number;
+  obscuraStealth: boolean;
+  obscuraBin: string;
   defaultTimeout: number;
   navigationTimeout: number;
   viewport: { width: number; height: number };

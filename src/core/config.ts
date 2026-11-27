@@ -55,6 +55,10 @@ export interface BrowserConfig {
   profilePath: string;
   headless: boolean;
   slowMo: number;
+  backend: 'playwright' | 'obscura';
+  obscuraBin: string;
+  obscuraPort: number;
+  obscuraStealth: boolean;
   defaultTimeout: number;
   navigationTimeout: number;
   userAgent?: string;
@@ -202,6 +206,10 @@ export const config: AppConfig = {
   },
   browser: {
     profilePath: expandHome(parseStringEnv('BROWSER_PROFILE_PATH', '~/.job-agent/browser-profile')),
+    backend: (parseStringEnv('BROWSER_BACKEND', 'playwright') as 'playwright' | 'obscura'),
+    obscuraBin: parseStringEnv('OBSCURA_BIN', 'obscura'),
+    obscuraPort: parseIntEnv('OBSCURA_PORT', 9222),
+    obscuraStealth: parseBoolEnv('OBSCURA_STEALTH', false),
     headless: parseBoolEnv('BROWSER_HEADLESS', true),
     // Phase 5E measured: the 50ms-per-action Playwright slowMo debug delay
     // consumed ~616ms/job (73% of application.total; fill.action 57.7ms ->

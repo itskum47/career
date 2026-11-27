@@ -9,6 +9,7 @@
   },
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "browser:install-obscura": "bash scripts/install-obscura.sh",
     "agent": "tsx apps/orchestrator/src/cli.ts run",
     "agent:discover": "tsx apps/orchestrator/src/cli.ts discover",
     "agent:apply": "tsx apps/orchestrator/src/cli.ts apply",

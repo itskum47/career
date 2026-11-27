@@ -74,6 +74,10 @@ export class BrowserController {
       profilePath: browserConfig?.profilePath || config.browser.profilePath,
       headless: browserConfig?.headless ?? config.browser.headless,
       slowMo: browserConfig?.slowMo ?? config.browser.slowMo,
+      backend: browserConfig?.backend ?? config.browser.backend,
+      obscuraPort: browserConfig?.obscuraPort ?? config.browser.obscuraPort,
+      obscuraStealth: browserConfig?.obscuraStealth ?? config.browser.obscuraStealth,
+      obscuraBin: browserConfig?.obscuraBin ?? config.browser.obscuraBin,
       defaultTimeout: browserConfig?.defaultTimeout ?? config.browser.defaultTimeout,
       navigationTimeout: browserConfig?.navigationTimeout ?? config.browser.navigationTimeout,
       viewport: browserConfig?.viewport ?? config.browser.viewport,
@@ -83,9 +87,11 @@ export class BrowserController {
     };
   }
 
+  private obscuraProcess: any = null;
+
   async initialize(): Promise<void> {
     const timer = startTimer({ stage: STAGES.BROWSER_LAUNCH });
-    logger.info('Initializing browser', { headless: this.config.headless });
+    logger.info('Initializing browser', { backend: this.config.backend, headless: this.config.headless });
 
     // Ensure profile directory exists
     const profileDir = path.dirname(this.config.profilePath);
@@ -94,6 +100,39 @@ export class BrowserController {
     }
 
     const ctxTimer = startTimer({ stage: STAGES.BROWSER_CONTEXT_CREATE });
+
+    if (this.config.backend === 'obscura') {
+      // Spawn obscura serve and connect over CDP.
+      const { spawn } = await import('child_process');
+      const args = ['serve', '--port', String(this.config.obscuraPort)];
+      if (this.config.obscuraStealth) args.push('--stealth');
+      this.obscuraProcess = spawn(this.config.obscuraBin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      // Wait for readiness
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('obscura serve did not become ready in time')), 30000);
+        const onData = (data: Buffer) => {
+          const text = data.toString();
+          if (text.includes('listening') || text.includes('ws://') || text.includes('ready')) {
+            clearTimeout(timeout);
+            this.obscuraProcess.stdout.off('data', onData);
+            resolve();
+          }
+        };
+        this.obscuraProcess.stdout.on('data', onData);
+        this.obscuraProcess.on('error', (err: any) => { clearTimeout(timeout); reject(err); });
+        this.obscuraProcess.on('exit', (code: number) => {
+          if (code !== 0 && code !== null) { clearTimeout(timeout); reject(new Error(`obscura exited with code ${code}`)); }
+        });
+      }).catch((e) => {
+        logger.warn('Obscura readiness probe timed out; attempting connection anyway', { error: String(e) });
+      });
+      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${this.config.obscuraPort}`);
+      this.browser = browser;
+      const contexts = browser.contexts();
+      this.context = contexts.length ? contexts[0] : await browser.newContext();
+      this.page = this.context.pages()[0] || await this.context.newPage();
+      ctxTimer.end(true);
+    } else {
     this.context = await chromium.launchPersistentContext(this.config.profilePath, {
       headless: this.config.headless,
       slowMo: this.config.slowMo,
@@ -110,10 +149,11 @@ export class BrowserController {
 
     this.browser = this.context.browser();
     this.page = this.context.pages()[0] || await this.context.newPage();
+    }
     
     // Set default timeouts
-    this.page.setDefaultTimeout(this.config.defaultTimeout);
-    this.page.setDefaultNavigationTimeout(this.config.navigationTimeout);
+    this.page!.setDefaultTimeout(this.config.defaultTimeout);
+    this.page!.setDefaultNavigationTimeout(this.config.navigationTimeout);
 
     timer.end(true);
     performanceCollector.record({ stage: STAGES.BROWSER_LAUNCH, durationMs: timer.getDurationMs(), success: true });
@@ -1329,6 +1369,10 @@ export class BrowserController {
       this.context = null;
       this.browser = null;
       this.page = null;
+    }
+    if (this.obscuraProcess) {
+      try { this.obscuraProcess.kill(); } catch {}
+      this.obscuraProcess = null;
     }
     logger.info('Browser closed');
   }
