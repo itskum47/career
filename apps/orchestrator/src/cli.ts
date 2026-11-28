@@ -685,10 +685,12 @@ async function runApplication(options: any) {
   }
 
   await services.appEngine.initialize();
+  const jobRecord = await services.jobRepo.getJob(options.jobId as any);
   const result = await services.appEngine.apply({
     jobId: options.jobId as any,
     profile,
     autoSubmit: options.autoSubmit,
+    jobUrl: options.applicationUrl || jobRecord?.applicationUrl || jobRecord?.url,
   });
 
   logger.info('Application completed', { success: result.success, applicationId: result.application.applicationId });
@@ -770,6 +772,8 @@ async function runFullPipeline(options: any) {
 
     // Apply
     if (!options.dryRun) {
+      // App engine (browser + escalation) must be initialized before applying.
+      try { await services.appEngine.initialize(); } catch (e) { logger.warn('App engine init failed', { error: String(e) }); }
       // Phase 6X — duplicate application protection (pre-flight).
       const dupCheck = await preflightDuplicateCheck({
         appRepo: services.appRepo,
@@ -784,6 +788,7 @@ async function runFullPipeline(options: any) {
         jobId: job.jobId as JobId,
         profile,
         autoSubmit: config.application.autoSubmit,
+        jobUrl: (job as any).applicationUrl || (job as any).url,
       });
       logger.info(`Applied to ${job.jobId}`, { success: appResult.success });
     } else {
