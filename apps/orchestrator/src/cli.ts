@@ -663,7 +663,7 @@ async function runGeneration(options: any) {
 
 async function runApplication(options: any) {
   logger.info('Starting application', options);
-  const services = await initializeServices(true);
+  const services = await initializeServices(false);
   const profile = await loadProfile();
 
   // Phase 6X — duplicate application protection (pre-flight).
@@ -837,9 +837,10 @@ async function showStatus(options: any) {
 }
 
 async function resumeApplication(options: any) {
-  const services = await initializeServices(true);
+  const services = await initializeServices(false);
   const profile = await loadProfile();
 
+  await services.appEngine.initialize();
   const result = await services.appEngine.resume(options.applicationId as any, profile);
   logger.info('Resume completed', { success: result.success });
 
