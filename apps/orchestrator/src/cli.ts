@@ -686,11 +686,17 @@ async function runApplication(options: any) {
 
   await services.appEngine.initialize();
   const jobRecord = await services.jobRepo.getJob(options.jobId as any);
+  const resumes = await services.resumeRepo.getByJobId(options.jobId as any, profile.candidateId);
+  const covers = await services.coverRepo.getByJobId(options.jobId as any, profile.candidateId);
   const result = await services.appEngine.apply({
     jobId: options.jobId as any,
     profile,
     autoSubmit: options.autoSubmit,
     jobUrl: options.applicationUrl || jobRecord?.applicationUrl || jobRecord?.url,
+    resume: resumes[0],
+    coverLetter: covers[0],
+    jobDescription: await services.jdRepo.getByJobId(options.jobId as any),
+    matchAnalysis: await services.matchRepo.getByJobId(options.jobId as any, profile.candidateId),
   });
 
   logger.info('Application completed', { success: result.success, applicationId: result.application.applicationId });
